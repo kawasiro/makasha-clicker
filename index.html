@@ -196,252 +196,203 @@
         </div>
     </div>
 
-    <script>
-        let score = 0;
-        let up1Level = 0;
-        let up1Cost = 100;
-        let up2Level = 0;
-        let up2Cost = 100;
-        let up3Level = 0;
+<script>
+/* ======================
+   모바일 성능 제한 설정
+====================== */
 
-        function nFormat(num) {
-            if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
-            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-            if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
-            return Math.floor(num).toString();
-        }
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-        function getClickPower() {
-            let base = 1 + up1Level;
-            let multiplier = 1;
-            for(let i = 1; i <= up3Level; i++) {
-                multiplier *= Math.pow(2, i);
-            }
-            return base * multiplier;
-        }
+const FALL_POOL_SIZE = isMobile ? 8 : 25;
+const MAX_FALL_ACTIVE = isMobile ? 6 : 20;
 
-        function getAutoPower() {
-            let total = 0;
-            for(let i = 1; i <= up2Level; i++) {
-                if(i >= 90) total += 1000;
-                else if(i >= 60) total += 200;
-                else if(i >= 30) total += 50;
-                else total += 10;
-            }
-            return total;
-        }
+/* ======================
+   기본 변수
+====================== */
 
-        const estates = [
-            { id: 0, name: "요정왕국 에르피엔", basePrice: 200000, currentVal: 200000, growth: 1000, reqLevel: 30, audio: "resources/에르핀 우는 소리.mp3", desc: "요정왕국 에르피엔이야!", owned: false },
-            { id: 1, name: "마녀왕국 벨리티엔", basePrice: 500000, currentVal: 500000, growth: 4000, reqLevel: 60, audio: "resources/말도 안되는 결과가.mp3", desc: "어라? 이건 반역인가?", owned: false },
-            { id: 2, name: "모나티엄", basePrice: 1500000, currentVal: 1500000, growth: 10000, reqLevel: 90, audio: "resources/예산이 부족했어.mp3", desc: "엘프들의 도시야!", owned: false },
-            { 
-                id: 3, 
-                name: "세계수 교단", 
-                basePrice: 927000000, 
-                currentVal: 927000000, 
-                growth: 5521, 
-                reqLevel: 150, 
-                audio: "resources/세계수시여.mp3", 
-                desc: "내가 이제 대빵이다!", 
-                owned: false,
-                isSpecial: true 
-            }
-        ];
+let score = 0;
+let up1Level = 0;
+let up1Cost = 100;
+let up2Level = 0;
+let up2Cost = 100;
+let up3Level = 0;
 
-        const audioFiles = ['resources/이히힛1.mp3', 'resources/이히힛2.mp3', 'resources/이히힛3.mp3', 'resources/이히힛4.mp3'];
-        const fallImages = ['resources/scared.gif', 'resources/smile.gif', 'resources/sex.gif'];
+/* ======================
+   숫자 포맷
+====================== */
 
-        function initEstates() {
-            const list = document.getElementById('estate-list');
-            list.innerHTML = '';
-            estates.forEach(est => {
-                const item = document.createElement('div');
-                item.id = `estate-item-${est.id}`;
-                item.className = `estate-item`;
-                item.innerHTML = `
-                    <div class="font-bold text-gray-800">${est.name}</div>
-                    <div class="text-xs text-gray-500 my-1">${est.desc}</div>
-                    <div class="text-[10px] text-orange-500 font-bold">상승률: +${nFormat(est.growth)}/s</div>
-                    <div id="est-req-${est.id}" class="text-xs font-bold">요구 새로운 결말 Lv.${est.reqLevel}</div>
-                    <div id="est-val-container-${est.id}" class="hidden">
-                        <div class="text-sm font-black text-[#8FC1B5] mt-1">현재 가치: <span id="est-val-${est.id}">0</span>P</div>
-                    </div>
-                    <button id="est-btn-${est.id}" class="upgrade-btn w-full p-2 mt-2 rounded-lg text-sm font-bold"></button>
-                `;
-                list.appendChild(item);
-                document.getElementById(`est-btn-${est.id}`).addEventListener('click', () => {
-                    if (est.owned) sellEstate(est.id); else buyEstate(est.id);
-                });
-            });
-        }
+function nFormat(num) {
+    if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+    return Math.floor(num).toString();
+}
 
-        // 랭크업 토스트 표시 함수
-        function showRankToast(multiplier) {
-            const toast = document.getElementById('rank-toast');
-            toast.innerText = `랭크 업! ${multiplier}배 더 강해졌다구!`;
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
+/* ======================
+   클릭 / 자동 파워
+====================== */
 
-        function updateUI() {
-            document.getElementById('score').innerText = nFormat(score);
-            document.getElementById('display-click').innerText = nFormat(getClickPower());
-            document.getElementById('display-auto').innerText = nFormat(getAutoPower());
-            document.getElementById('display-rank').innerText = up3Level;
-            document.getElementById('lv1').innerText = up1Level;
-            document.getElementById('cost1').innerText = nFormat(up1Cost);
-            document.getElementById('lv2').innerText = up2Level;
-            document.getElementById('cost2').innerText = nFormat(up2Cost);
+function getClickPower() {
+    let base = 1 + up1Level;
+    let multiplier = 1;
+    for (let i = 1; i <= up3Level; i++) {
+        multiplier *= Math.pow(2, i);
+    }
+    return base * multiplier;
+}
 
-            const rankInfo = document.getElementById('rank-info');
-            if(up3Level >= 5) {
-                rankInfo.innerText = "최대 랭크 도달!";
-                rankInfo.classList.remove('text-blue-500');
-                rankInfo.classList.add('text-red-500');
-            } else {
-                let nextTarget = (up3Level < 4) ? (up3Level + 1) * 25 : 150;
-                rankInfo.innerText = `다음 랭크까지: ${nextTarget - up1Level} Lv`;
-                rankInfo.classList.add('text-blue-500');
-            }
+function getAutoPower() {
+    let total = 0;
+    for (let i = 1; i <= up2Level; i++) {
+        if (i >= 90) total += 1000;
+        else if (i >= 60) total += 200;
+        else if (i >= 30) total += 50;
+        else total += 10;
+    }
+    return total;
+}
 
-            const autoInfo = document.getElementById('auto-info');
-            let nextInc = up2Level >= 89 ? 1000 : (up2Level >= 59 ? 200 : (up2Level >= 29 ? 50 : 10));
-            autoInfo.innerText = `강화당 초당 +${nextInc}P`;
+/* ======================
+   오디오 풀
+====================== */
 
-            document.getElementById('upgrade1').disabled = score < up1Cost;
-            document.getElementById('upgrade2').disabled = score < up2Cost;
+const audioFiles = [
+    'resources/이히힛1.mp3',
+    'resources/이히힛2.mp3',
+    'resources/이히힛3.mp3',
+    'resources/이히힛4.mp3'
+];
 
-            updateEstateUI();
-        }
+const clickAudios = audioFiles.map(src => {
+    const a = new Audio(src);
+    a.preload = "auto";
+    return a;
+});
 
-        function updateEstateUI() {
-            const allOthersOwned = estates.filter(e => !e.isSpecial).every(e => e.owned);
-            estates.forEach(est => {
-                const isLevelMet = up2Level >= est.reqLevel;
-                const isConditionMet = est.isSpecial ? (isLevelMet && allOthersOwned) : isLevelMet;
-                const item = document.getElementById(`estate-item-${est.id}`);
-                const btn = document.getElementById(`est-btn-${est.id}`);
-                const reqText = document.getElementById(`est-req-${est.id}`);
-                
-                if (est.owned) {
-                    item.classList.add('owned');
-                    document.getElementById(`est-val-container-${est.id}`).classList.remove('hidden');
-                    document.getElementById(`est-val-${est.id}`).innerText = nFormat(est.currentVal);
-                    btn.innerText = `판매 (${nFormat(est.currentVal)}P)`;
-                } else {
-                    item.classList.remove('owned');
-                    document.getElementById(`est-val-container-${est.id}`).classList.add('hidden');
-                    btn.innerText = `구매 (${nFormat(est.basePrice)}P)`;
-                    btn.disabled = (score < est.basePrice || !isConditionMet);
-                }
-            });
-        }
+function playClickSound() {
+    const a = clickAudios[Math.floor(Math.random() * clickAudios.length)];
+    a.currentTime = 0;
+    a.play().catch(()=>{});
+}
 
-        function buyEstate(id) {
-            const est = estates[id];
-            const allOthersOwned = estates.filter(e => !e.isSpecial).every(e => e.owned);
-            if (score >= est.basePrice && up2Level >= est.reqLevel && (est.isSpecial ? allOthersOwned : true) && !est.owned) {
-                score -= est.basePrice;
-                est.owned = true;
-                est.currentVal = est.basePrice;
-                new Audio(est.audio).play().catch(()=>{});
-                updateUI();
-            }
-        }
+/* ======================
+   falling item 풀링
+====================== */
 
-        function sellEstate(id) {
-            const est = estates[id];
-            if (est.owned) {
-                score += est.currentVal;
-                est.owned = false;
-                est.currentVal = est.basePrice;
-                updateUI();
-            }
-        }
+const fallImages = [
+    'resources/scared.gif',
+    'resources/smile.gif',
+    'resources/sex.gif'
+];
 
-        function spawnFallingItem() {
-            const img = document.createElement('img');
-            img.src = fallImages[Math.floor(Math.random() * fallImages.length)];
-            img.className = 'falling-item';
-            img.style.left = Math.random() * 95 + 'vw';
-            const duration = Math.random() * 1.5 + 1.5;
-            img.style.animation = `fall ${duration}s linear forwards`;
-            document.body.appendChild(img);
-            setTimeout(() => img.remove(), 5000);
-        }
+const fallPool = [];
+let activeFalls = 0;
 
-        initEstates();
+function initFallPool() {
+    for (let i = 0; i < FALL_POOL_SIZE; i++) {
+        const img = document.createElement('img');
+        img.className = 'falling-item';
+        img.style.display = 'none';
+        document.body.appendChild(img);
+        fallPool.push(img);
+    }
+}
 
-        document.getElementById('estate-toggle').addEventListener('click', () => {
-            document.getElementById('estate-tab').classList.toggle('open');
-        });
+function spawnFallingItem() {
+    if (activeFalls >= MAX_FALL_ACTIVE) return;
 
-        document.getElementById('upgrade1').addEventListener('click', () => {
-            if (score >= up1Cost) {
-                score -= up1Cost;
-                up1Level++;
-                up1Cost *= 1.1;
-                
-                // 랭크 로직 및 토스트 알림
-                let oldRank = up3Level;
-                if (up1Level < 100) {
-                    up3Level = Math.floor(up1Level / 25);
-                } else if (up1Level >= 150) {
-                    up3Level = 5;
-                } else {
-                    up3Level = 4;
-                }
+    const img = fallPool.find(i => i.style.display === 'none');
+    if (!img) return;
 
-                if (up3Level > oldRank) {
-                    showRankToast(Math.pow(2, up3Level));
-                }
-                
-                new Audio('resources/아 여기서 더 강해지다니.mp3').play().catch(()=>{});
-                updateUI();
-            }
-        });
+    activeFalls++;
 
-        document.getElementById('upgrade2').addEventListener('click', () => {
-            if (score >= up2Cost) {
-                score -= up2Cost;
-                up2Level++;
-                up2Cost *= 1.1;
-                new Audio('resources/새로운 이야기를 쓸때가 왔어.mp3').play().catch(()=>{});
-                updateUI();
-            }
-        });
+    img.src = fallImages[Math.floor(Math.random() * fallImages.length)];
+    img.style.left = Math.random() * 95 + 'vw';
 
-        document.getElementById('danceButton').addEventListener('click', (e) => {
-            e.preventDefault();
-            score += getClickPower();
-            new Audio(audioFiles[Math.floor(Math.random() * audioFiles.length)]).play().catch(()=>{});
-            spawnFallingItem();
-            updateUI();
-        });
+    const duration = Math.random() * 1.5 + 1.5;
 
-        let worldTreeTimer = 0;
-        setInterval(() => {
-            score += getAutoPower();
-            worldTreeTimer++;
-            estates.forEach(est => {
-                if (est.owned) {
-                    est.currentVal += est.growth;
-                    if(est.isSpecial && worldTreeTimer >= 10) est.growth += 5521;
-                }
-            });
-            if(worldTreeTimer >= 10) worldTreeTimer = 0;
-            updateUI();
-        }, 1000);
+    img.style.display = 'block';
+    img.style.animation = 'none';
+    img.offsetHeight;
+    img.style.animation = `fall ${duration}s linear forwards`;
 
-        setInterval(updateUI, 100);
-        document.getElementById('open-modal').addEventListener('click', () => document.getElementById('help-modal').style.display = 'flex');
-        document.getElementById('close-modal').addEventListener('click', () => document.getElementById('help-modal').style.display = 'none');
-        window.addEventListener('contextmenu', e => e.preventDefault());
-        document.addEventListener('dragstart', e => e.preventDefault());
-    </script>
+    setTimeout(() => {
+        img.style.display = 'none';
+        activeFalls--;
+    }, duration * 1000);
+}
+
+/* ======================
+   UI 업데이트 관리
+====================== */
+
+let uiDirty = true;
+
+function requestUIUpdate() {
+    uiDirty = true;
+}
+
+setInterval(() => {
+    if (uiDirty) {
+        updateUI();
+        uiDirty = false;
+    }
+}, 100);
+
+/* ======================
+   UI 업데이트
+====================== */
+
+function updateUI() {
+    document.getElementById('score').innerText = nFormat(score);
+    document.getElementById('display-click').innerText = nFormat(getClickPower());
+    document.getElementById('display-auto').innerText = nFormat(getAutoPower());
+    document.getElementById('display-rank').innerText = up3Level;
+
+    document.getElementById('lv1').innerText = up1Level;
+    document.getElementById('cost1').innerText = nFormat(up1Cost);
+    document.getElementById('lv2').innerText = up2Level;
+    document.getElementById('cost2').innerText = nFormat(up2Cost);
+
+    document.getElementById('upgrade1').disabled = score < up1Cost;
+    document.getElementById('upgrade2').disabled = score < up2Cost;
+}
+
+/* ======================
+   이벤트
+====================== */
+
+const danceBtn = document.getElementById('danceButton');
+
+danceBtn.addEventListener(
+    isMobile ? 'touchstart' : 'click',
+    (e) => {
+        e.preventDefault();
+        score += getClickPower();
+        playClickSound();
+        spawnFallingItem();
+        requestUIUpdate();
+    },
+    { passive: false }
+);
+
+/* ======================
+   자동 수익
+====================== */
+
+setInterval(() => {
+    score += getAutoPower();
+    requestUIUpdate();
+}, 1000);
+
+/* ======================
+   초기화
+====================== */
+
+initFallPool();
+requestUIUpdate();
+</script>
+  
 </body>
 </html>
